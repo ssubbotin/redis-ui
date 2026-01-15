@@ -57,8 +57,12 @@ export default function PubSubView() {
   const [publishMessage, setPublishMessage] = useState('')
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState(null)
+  const [paused, setPaused] = useState(false)
+  const [newMessageCount, setNewMessageCount] = useState(0)
   const unsubscribeRef = useRef(null)
   const messagesEndRef = useRef(null)
+  const messagesContainerRef = useRef(null)
+  const isNearBottomRef = useRef(true)
 
   // Load active channels
   const loadChannels = async () => {
@@ -76,10 +80,43 @@ export default function PubSubView() {
     return () => clearInterval(interval)
   }, [])
 
-  // Auto-scroll to bottom
+  // Check if scrolled near bottom
+  const checkIfNearBottom = () => {
+    const container = messagesContainerRef.current
+    if (!container) return true
+    const threshold = 100
+    return container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+  }
+
+  // Handle scroll - pause when user scrolls up
+  const handleScroll = () => {
+    const nearBottom = checkIfNearBottom()
+    isNearBottomRef.current = nearBottom
+
+    if (!nearBottom && !paused) {
+      setPaused(true)
+      setNewMessageCount(0)
+    } else if (nearBottom && paused) {
+      setPaused(false)
+      setNewMessageCount(0)
+    }
+  }
+
+  // Auto-scroll to bottom when not paused
   useEffect(() => {
+    if (!paused && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    } else if (paused) {
+      setNewMessageCount(prev => prev + 1)
+    }
+  }, [messages.length])
+
+  // Resume and scroll to bottom
+  const handleResume = () => {
+    setPaused(false)
+    setNewMessageCount(0)
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }
 
   // Clean up subscription on unmount
   useEffect(() => {
@@ -101,6 +138,8 @@ export default function PubSubView() {
     setMessages([])
     setActiveSubscription(channel)
     setError(null)
+    setPaused(false)
+    setNewMessageCount(0)
 
     const unsubscribe = subscribeToPubSub(
       channel,
@@ -254,7 +293,7 @@ export default function PubSubView() {
                   Unsubscribe
                 </button>
               </div>
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 overflow-auto relative" ref={messagesContainerRef} onScroll={handleScroll}>
                 {messages.length > 0 ? (
                   <div>
                     {messages.map((msg, i) => (
@@ -267,9 +306,25 @@ export default function PubSubView() {
                     Waiting for messages...
                   </div>
                 )}
+                {/* New messages indicator */}
+                {paused && newMessageCount > 0 && (
+                  <button
+                    onClick={handleResume}
+                    className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-red-600 text-white text-sm rounded-full shadow-lg hover:bg-red-700 flex items-center gap-2"
+                  >
+                    <span>{newMessageCount} new message{newMessageCount > 1 ? 's' : ''}</span>
+                    <span>↓</span>
+                  </button>
+                )}
               </div>
-              <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-500">
-                {messages.length} messages received
+              <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 flex items-center justify-between">
+                <span>{messages.length} messages received</span>
+                {paused && (
+                  <span className="text-yellow-600 flex items-center gap-1">
+                    <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                    Paused - scroll down to resume
+                  </span>
+                )}
               </div>
             </>
           ) : (
