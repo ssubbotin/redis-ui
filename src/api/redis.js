@@ -39,3 +39,16 @@ export async function deleteKey(key) {
 export async function getInfo() {
   return fetchJson(`${API_BASE}/info`)
 }
+
+// Stream-specific API
+export async function getStreamGroups(key) {
+  return fetchJson(`${API_BASE}/stream/${encodeURIComponent(key)}/groups`)
+}
+
+export async function getStreamConsumers(key, group) {
+  return fetchJson(`${API_BASE}/stream/${encodeURIComponent(key)}/groups/${encodeURIComponent(group)}/consumers`)
+}
+
+export async function getStreamPending(key, group, count = 100) {
+  return fetchJson(`${API_BASE}/stream/${encodeURIComponent(key)}/groups/${encodeURIComponent(group)}/pending?count=${count}`)
+}

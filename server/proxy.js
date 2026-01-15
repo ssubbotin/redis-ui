@@ -43,6 +43,7 @@ app.get('/api/key/:key(*)', async (req, res) => {
     const ttl = await redis.ttl(key)
 
     let value
+    let streamInfo = null
     switch (type) {
       case 'string':
         value = await redis.get(key)
@@ -59,11 +60,23 @@ app.get('/api/key/:key(*)', async (req, res) => {
       case 'hash':
         value = await redis.hgetall(key)
         break
+      case 'stream':
+        // Get stream info and recent messages
+        const infoResult = await redis.xinfo('STREAM', key).catch(() => null)
+        if (infoResult) {
+          streamInfo = {}
+          for (let i = 0; i < infoResult.length; i += 2) {
+            streamInfo[infoResult[i]] = infoResult[i + 1]
+          }
+        }
+        // Get last 100 messages
+        value = await redis.xrange(key, '-', '+', 'COUNT', 100)
+        break
       default:
         value = null
     }
 
-    res.json({ key, type, ttl, value })
+    res.json({ key, type, ttl, value, streamInfo })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -92,6 +105,79 @@ app.delete('/api/key/:key(*)', async (req, res) => {
     const { key } = req.params
     await redis.del(key)
     res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Get stream consumer groups
+app.get('/api/stream/:key(*)/groups', async (req, res) => {
+  try {
+    const { key } = req.params
+    const groupsResult = await redis.xinfo('GROUPS', key).catch(() => [])
+
+    const groups = groupsResult.map(group => {
+      const obj = {}
+      for (let i = 0; i < group.length; i += 2) {
+        obj[group[i]] = group[i + 1]
+      }
+      return obj
+    })
+
+    res.json(groups)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Get stream consumers for a group
+app.get('/api/stream/:key(*)/groups/:group/consumers', async (req, res) => {
+  try {
+    const { key, group } = req.params
+    const consumersResult = await redis.xinfo('CONSUMERS', key, group).catch(() => [])
+
+    const consumers = consumersResult.map(consumer => {
+      const obj = {}
+      for (let i = 0; i < consumer.length; i += 2) {
+        obj[consumer[i]] = consumer[i + 1]
+      }
+      return obj
+    })
+
+    res.json(consumers)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Get pending messages for a group
+app.get('/api/stream/:key(*)/groups/:group/pending', async (req, res) => {
+  try {
+    const { key, group } = req.params
+    const count = parseInt(req.query.count) || 100
+
+    // Get pending summary
+    const pendingSummary = await redis.xpending(key, group).catch(() => null)
+
+    // Get pending messages detail
+    const pendingMessages = await redis.xpending(key, group, '-', '+', count).catch(() => [])
+
+    const messages = pendingMessages.map(msg => ({
+      id: msg[0],
+      consumer: msg[1],
+      idleTime: msg[2],
+      deliveryCount: msg[3]
+    }))
+
+    res.json({
+      summary: pendingSummary ? {
+        count: pendingSummary[0],
+        minId: pendingSummary[1],
+        maxId: pendingSummary[2],
+        consumers: pendingSummary[3]
+      } : null,
+      messages
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

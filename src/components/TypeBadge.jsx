@@ -4,6 +4,7 @@ const typeColors = {
   set: 'bg-purple-100 text-purple-800',
   zset: 'bg-orange-100 text-orange-800',
   hash: 'bg-pink-100 text-pink-800',
+  stream: 'bg-cyan-100 text-cyan-800',
   none: 'bg-gray-100 text-gray-800'
 }
 

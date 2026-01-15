@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import TypeBadge from './TypeBadge'
+import StreamView from './StreamView'
 
 function formatValue(value, type) {
   if (value === null || value === undefined) return 'null'
@@ -62,6 +63,29 @@ export default function KeyValue({ data, onSave, onDelete, loading }) {
   const handleSave = () => {
     onSave(data.key, editValue)
     setEditing(false)
+  }
+
+  // Render StreamView for stream type
+  if (data.type === 'stream') {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h2 className="font-mono text-lg font-medium truncate max-w-md">{data.key}</h2>
+            <TypeBadge type={data.type} />
+          </div>
+          <button
+            onClick={() => onDelete(data.key)}
+            className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            Delete
+          </button>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <StreamView data={data} />
+        </div>
+      </div>
+    )
   }
 
   return (
