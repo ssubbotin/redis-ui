@@ -2,6 +2,15 @@ import { useState, useEffect } from 'react'
 import TypeBadge from './TypeBadge'
 import StreamView from './StreamView'
 
+function tryParseJson(str) {
+  if (typeof str !== 'string') return str
+  try {
+    return JSON.parse(str)
+  } catch {
+    return str
+  }
+}
+
 function formatValue(value, type) {
   if (value === null || value === undefined) return 'null'
 
@@ -15,7 +24,12 @@ function formatValue(value, type) {
   }
 
   if (type === 'hash') {
-    return JSON.stringify(value, null, 2)
+    // Try to parse JSON values inside the hash
+    const formatted = {}
+    for (const [k, v] of Object.entries(value)) {
+      formatted[k] = tryParseJson(v)
+    }
+    return JSON.stringify(formatted, null, 2)
   }
 
   if (type === 'zset') {
