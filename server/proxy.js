@@ -183,6 +183,83 @@ app.get('/api/stream/:key(*)/groups/:group/pending', async (req, res) => {
   }
 })
 
+// Pub/Sub: List active channels
+app.get('/api/pubsub/channels', async (req, res) => {
+  try {
+    const pattern = req.query.pattern || '*'
+    const channels = await redis.pubsub('CHANNELS', pattern)
+
+    // Get subscriber counts for each channel
+    const withCounts = await Promise.all(
+      channels.map(async (channel) => {
+        const result = await redis.pubsub('NUMSUB', channel)
+        return { channel, subscribers: result[1] || 0 }
+      })
+    )
+
+    res.json(withCounts)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Pub/Sub: Subscribe to channel (SSE)
+app.get('/api/pubsub/subscribe/:channel(*)', async (req, res) => {
+  const { channel } = req.params
+
+  // Set up SSE
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.flushHeaders()
+
+  // Create a new Redis connection for subscription
+  const subscriber = new Redis({
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379')
+  })
+
+  // Handle messages
+  subscriber.on('message', (ch, message) => {
+    res.write(`data: ${JSON.stringify({ channel: ch, message, timestamp: Date.now() })}\n\n`)
+  })
+
+  // Handle pattern messages
+  subscriber.on('pmessage', (pattern, ch, message) => {
+    res.write(`data: ${JSON.stringify({ pattern, channel: ch, message, timestamp: Date.now() })}\n\n`)
+  })
+
+  // Subscribe
+  if (channel.includes('*')) {
+    await subscriber.psubscribe(channel)
+    res.write(`data: ${JSON.stringify({ type: 'subscribed', pattern: channel })}\n\n`)
+  } else {
+    await subscriber.subscribe(channel)
+    res.write(`data: ${JSON.stringify({ type: 'subscribed', channel })}\n\n`)
+  }
+
+  // Clean up on disconnect
+  req.on('close', () => {
+    subscriber.disconnect()
+  })
+})
+
+// Pub/Sub: Publish message
+app.post('/api/pubsub/publish/:channel(*)', async (req, res) => {
+  try {
+    const { channel } = req.params
+    const { message } = req.body
+
+    const subscribers = await redis.publish(channel,
+      typeof message === 'string' ? message : JSON.stringify(message)
+    )
+
+    res.json({ success: true, subscribers })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // Get Redis server info
 app.get('/api/info', async (req, res) => {
   try {

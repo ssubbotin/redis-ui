@@ -4,8 +4,10 @@ import SearchBar from './components/SearchBar'
 import KeyList from './components/KeyList'
 import KeyValue from './components/KeyValue'
 import ServerInfo from './components/ServerInfo'
+import PubSubView from './components/PubSubView'
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState('keys')
   const [keys, setKeys] = useState([])
   const [selectedKey, setSelectedKey] = useState(null)
   const [keyData, setKeyData] = useState(null)
@@ -88,18 +90,42 @@ export default function App() {
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
+      <header className="bg-white border-b border-gray-200 px-6 py-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
             <h1 className="text-xl font-bold text-red-600">Redis UI</h1>
+            <nav className="flex gap-1">
+              <button
+                onClick={() => setActiveTab('keys')}
+                className={`px-4 py-2 text-sm font-medium rounded-lg ${
+                  activeTab === 'keys'
+                    ? 'bg-red-100 text-red-700'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                Keys
+              </button>
+              <button
+                onClick={() => setActiveTab('pubsub')}
+                className={`px-4 py-2 text-sm font-medium rounded-lg ${
+                  activeTab === 'pubsub'
+                    ? 'bg-red-100 text-red-700'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                Pub/Sub
+              </button>
+            </nav>
             <ServerInfo info={serverInfo} loading={loading.info} />
           </div>
-          <button
-            onClick={handleRefresh}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
-          >
-            Refresh
-          </button>
+          {activeTab === 'keys' && (
+            <button
+              onClick={handleRefresh}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+            >
+              Refresh
+            </button>
+          )}
         </div>
       </header>
 
@@ -114,35 +140,41 @@ export default function App() {
       )}
 
       {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-80 border-r border-gray-200 flex flex-col bg-white">
-          <div className="p-4 border-b border-gray-200">
-            <SearchBar onSearch={loadKeys} loading={loading.keys} />
-          </div>
-          <div className="flex-1 overflow-auto">
-            <KeyList
-              keys={keys}
-              selectedKey={selectedKey}
-              onSelect={loadKeyValue}
-              loading={loading.keys}
-            />
-          </div>
-          <div className="p-3 border-t border-gray-200 text-sm text-gray-500 text-center">
-            {keys.length} keys
-          </div>
-        </aside>
+      {activeTab === 'keys' ? (
+        <div className="flex-1 flex overflow-hidden">
+          {/* Sidebar */}
+          <aside className="w-80 border-r border-gray-200 flex flex-col bg-white">
+            <div className="p-4 border-b border-gray-200">
+              <SearchBar onSearch={loadKeys} loading={loading.keys} />
+            </div>
+            <div className="flex-1 overflow-auto">
+              <KeyList
+                keys={keys}
+                selectedKey={selectedKey}
+                onSelect={loadKeyValue}
+                loading={loading.keys}
+              />
+            </div>
+            <div className="p-3 border-t border-gray-200 text-sm text-gray-500 text-center">
+              {keys.length} keys
+            </div>
+          </aside>
 
-        {/* Main panel */}
-        <main className="flex-1 bg-white">
-          <KeyValue
-            data={keyData}
-            onSave={handleSave}
-            onDelete={handleDelete}
-            loading={loading.value}
-          />
-        </main>
-      </div>
+          {/* Main panel */}
+          <main className="flex-1 bg-white">
+            <KeyValue
+              data={keyData}
+              onSave={handleSave}
+              onDelete={handleDelete}
+              loading={loading.value}
+            />
+          </main>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-hidden bg-white">
+          <PubSubView />
+        </div>
+      )}
     </div>
   )
 }

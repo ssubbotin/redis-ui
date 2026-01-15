@@ -52,3 +52,34 @@ export async function getStreamConsumers(key, group) {
 export async function getStreamPending(key, group, count = 100) {
   return fetchJson(`${API_BASE}/stream/${encodeURIComponent(key)}/groups/${encodeURIComponent(group)}/pending?count=${count}`)
 }
+
+// Pub/Sub API
+export async function getPubSubChannels(pattern = '*') {
+  return fetchJson(`${API_BASE}/pubsub/channels?pattern=${encodeURIComponent(pattern)}`)
+}
+
+export function subscribeToPubSub(channel, onMessage, onError) {
+  const eventSource = new EventSource(`${API_BASE}/pubsub/subscribe/${encodeURIComponent(channel)}`)
+
+  eventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      onMessage(data)
+    } catch (err) {
+      onError?.(err)
+    }
+  }
+
+  eventSource.onerror = (err) => {
+    onError?.(err)
+  }
+
+  return () => eventSource.close()
+}
+
+export async function publishToPubSub(channel, message) {
+  return fetchJson(`${API_BASE}/pubsub/publish/${encodeURIComponent(channel)}`, {
+    method: 'POST',
+    body: JSON.stringify({ message })
+  })
+}
