@@ -5,7 +5,8 @@ A modern, lean web UI for Redis.
 ## Features
 
 - Browse and search Redis keys
-- View values for all data types (string, list, set, sorted set, hash)
+- View values for all data types (string, list, set, sorted set, hash, stream)
+- Redis Streams support with consumer groups, consumers, and pending messages
 - Edit string values inline
 - Delete keys
 - Server info display (memory, clients, version)
@@ -18,22 +19,33 @@ A modern, lean web UI for Redis.
 
 ## Quick Start
 
-### Using Docker (recommended)
-
-```bash
-# Start with included Redis
-docker-compose up -d
-
-# Open http://localhost:3000
-```
-
-### Connect to external Redis
+### Using Docker Hub (recommended)
 
 ```bash
 docker run -p 3000:3000 \
   -e REDIS_HOST=your-redis-host \
   -e REDIS_PORT=6379 \
-  redis-ui
+  ssubbotin/redis-ui
+```
+
+Open http://localhost:3000
+
+### Using Docker Compose
+
+```yaml
+services:
+  redis-ui:
+    image: ssubbotin/redis-ui:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
 ```
 
 ### Local Development
