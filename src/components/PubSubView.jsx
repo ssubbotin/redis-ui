@@ -1,5 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
-import { getPubSubChannels, subscribeToPubSub, publishToPubSub } from '../api/redis'
+import { getPubSubChannels, subscribeToPubSub, publishToPubSub, getConfig } from '../api/redis'
+
+// Helper to get value at a dot-separated path (e.g., "payload.object")
+function getValueAtPath(obj, path) {
+  if (!path || !obj) return null
+  const parts = path.split('.')
+  let current = obj
+  for (const part of parts) {
+    if (current === null || current === undefined) return null
+    current = current[part]
+  }
+  return current
+}
 
 function formatTimestamp(ts) {
   return new Date(ts).toLocaleTimeString()
@@ -59,10 +71,21 @@ export default function PubSubView() {
   const [error, setError] = useState(null)
   const [paused, setPaused] = useState(false)
   const [newMessageCount, setNewMessageCount] = useState(0)
+  const [groupByPath, setGroupByPath] = useState('')
+  const [activeGroup, setActiveGroup] = useState(null) // null means "All"
   const unsubscribeRef = useRef(null)
   const messagesEndRef = useRef(null)
   const messagesContainerRef = useRef(null)
   const isNearBottomRef = useRef(true)
+
+  // Load config
+  useEffect(() => {
+    getConfig().then(config => {
+      setGroupByPath(config.pubsubGroupByPath || '')
+    }).catch(err => {
+      console.error('Failed to load config:', err)
+    })
+  }, [])
 
   // Load active channels
   const loadChannels = async () => {
@@ -184,6 +207,32 @@ export default function PubSubView() {
     }
   }
 
+  // Compute groups and filtered messages
+  const messagesWithGroups = groupByPath
+    ? messages.map(msg => {
+        try {
+          const parsed = JSON.parse(msg.message)
+          const group = getValueAtPath(parsed, groupByPath)
+          return { ...msg, group: group != null ? String(group) : '_unknown' }
+        } catch {
+          return { ...msg, group: '_unknown' }
+        }
+      })
+    : messages.map(msg => ({ ...msg, group: null }))
+
+  const groups = groupByPath
+    ? [...new Set(messagesWithGroups.map(m => m.group))].sort()
+    : []
+
+  const filteredMessages = activeGroup === null
+    ? messagesWithGroups
+    : messagesWithGroups.filter(m => m.group === activeGroup)
+
+  // Reset active group when subscription changes
+  useEffect(() => {
+    setActiveGroup(null)
+  }, [activeSubscription])
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -293,17 +342,49 @@ export default function PubSubView() {
                   Unsubscribe
                 </button>
               </div>
+              {/* Group tabs */}
+              {groupByPath && groups.length > 0 && (
+                <div className="px-4 py-2 border-b border-gray-200 flex items-center gap-2 overflow-x-auto">
+                  <span className="text-xs text-gray-500 shrink-0">Groups:</span>
+                  <button
+                    onClick={() => setActiveGroup(null)}
+                    className={`px-2 py-1 text-xs rounded shrink-0 ${
+                      activeGroup === null
+                        ? 'bg-red-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    All ({messages.length})
+                  </button>
+                  {groups.map(group => {
+                    const count = messagesWithGroups.filter(m => m.group === group).length
+                    return (
+                      <button
+                        key={group}
+                        onClick={() => setActiveGroup(group)}
+                        className={`px-2 py-1 text-xs rounded shrink-0 ${
+                          activeGroup === group
+                            ? 'bg-red-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {group === '_unknown' ? '(unknown)' : group} ({count})
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
               <div className="flex-1 overflow-auto relative" ref={messagesContainerRef} onScroll={handleScroll}>
-                {messages.length > 0 ? (
+                {filteredMessages.length > 0 ? (
                   <div>
-                    {messages.map((msg, i) => (
+                    {filteredMessages.map((msg, i) => (
                       <MessageItem key={i} data={msg} />
                     ))}
                     <div ref={messagesEndRef} />
                   </div>
                 ) : (
                   <div className="p-4 text-center text-gray-500">
-                    Waiting for messages...
+                    {messages.length > 0 ? 'No messages in this group' : 'Waiting for messages...'}
                   </div>
                 )}
                 {/* New messages indicator */}
@@ -318,7 +399,11 @@ export default function PubSubView() {
                 )}
               </div>
               <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 flex items-center justify-between">
-                <span>{messages.length} messages received</span>
+                <span>
+                  {activeGroup !== null
+                    ? `${filteredMessages.length} of ${messages.length} messages`
+                    : `${messages.length} messages received`}
+                </span>
                 {paused && (
                   <span className="text-yellow-600 flex items-center gap-1">
                     <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>

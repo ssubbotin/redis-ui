@@ -40,6 +40,10 @@ export async function getInfo() {
   return fetchJson(`${API_BASE}/info`)
 }
 
+export async function getConfig() {
+  return fetchJson(`${API_BASE}/config`)
+}
+
 // Stream-specific API
 export async function getStreamGroups(key) {
   return fetchJson(`${API_BASE}/stream/${encodeURIComponent(key)}/groups`)

@@ -18,6 +18,16 @@ const redis = new Redis({
 redis.on('error', (err) => console.error('Redis connection error:', err))
 redis.on('connect', () => console.log('Connected to Redis'))
 
+// Pub/Sub config
+const pubsubGroupByPath = process.env.PUBSUB_GROUP_BY_PATH || ''
+
+// Get config
+app.get('/api/config', (req, res) => {
+  res.json({
+    pubsubGroupByPath
+  })
+})
+
 // Get keys matching pattern
 app.get('/api/keys', async (req, res) => {
   try {
