@@ -120,6 +120,24 @@ app.delete('/api/key/:key(*)', async (req, res) => {
   }
 })
 
+// Set hash fields (replaces all fields)
+app.put('/api/hash/:key(*)', async (req, res) => {
+  try {
+    const { key } = req.params
+    const { fields } = req.body
+
+    // Delete existing hash and set new fields
+    await redis.del(key)
+    if (Object.keys(fields).length > 0) {
+      await redis.hset(key, fields)
+    }
+
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // Get stream consumer groups
 app.get('/api/stream/:key(*)/groups', async (req, res) => {
   try {

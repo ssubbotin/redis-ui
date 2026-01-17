@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getKeys, getKey, setKey, deleteKey, getInfo } from './api/redis'
+import { getKeys, getKey, setKey, setHashFields, deleteKey, getInfo } from './api/redis'
 import SearchBar from './components/SearchBar'
 import KeyList from './components/KeyList'
 import KeyValue from './components/KeyValue'
@@ -56,6 +56,15 @@ export default function App() {
   const handleSave = async (key, value) => {
     try {
       await setKey(key, value)
+      await loadKeyValue(key)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const handleSaveHash = async (key, fields) => {
+    try {
+      await setHashFields(key, fields)
       await loadKeyValue(key)
     } catch (err) {
       setError(err.message)
@@ -165,6 +174,7 @@ export default function App() {
             <KeyValue
               data={keyData}
               onSave={handleSave}
+              onSaveHash={handleSaveHash}
               onDelete={handleDelete}
               loading={loading.value}
             />

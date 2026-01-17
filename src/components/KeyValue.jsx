@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import TypeBadge from './TypeBadge'
 import StreamView from './StreamView'
+import JsonHighlight from './JsonHighlight'
 
 function tryParseJson(str) {
   if (typeof str !== 'string') return str
@@ -9,6 +10,24 @@ function tryParseJson(str) {
   } catch {
     return str
   }
+}
+
+// Decode hash from Redis format (values are JSON strings) to display format
+function decodeHash(value) {
+  const decoded = {}
+  for (const [k, v] of Object.entries(value)) {
+    decoded[k] = tryParseJson(v)
+  }
+  return decoded
+}
+
+// Encode hash from display format back to Redis format (stringify non-string values)
+function encodeHash(decoded) {
+  const encoded = {}
+  for (const [k, v] of Object.entries(decoded)) {
+    encoded[k] = typeof v === 'string' ? v : JSON.stringify(v)
+  }
+  return encoded
 }
 
 function formatValue(value, type) {
@@ -24,12 +43,7 @@ function formatValue(value, type) {
   }
 
   if (type === 'hash') {
-    // Try to parse JSON values inside the hash
-    const formatted = {}
-    for (const [k, v] of Object.entries(value)) {
-      formatted[k] = tryParseJson(v)
-    }
-    return JSON.stringify(formatted, null, 2)
+    return JSON.stringify(decodeHash(value), null, 2)
   }
 
   if (type === 'zset') {
@@ -47,14 +61,16 @@ function formatValue(value, type) {
   return String(value)
 }
 
-export default function KeyValue({ data, onSave, onDelete, loading }) {
+export default function KeyValue({ data, onSave, onSaveHash, onDelete, loading }) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
+  const [parseError, setParseError] = useState(null)
 
   useEffect(() => {
     if (data) {
       setEditValue(formatValue(data.value, data.type))
       setEditing(false)
+      setParseError(null)
     }
   }, [data])
 
@@ -75,9 +91,31 @@ export default function KeyValue({ data, onSave, onDelete, loading }) {
   }
 
   const handleSave = () => {
-    onSave(data.key, editValue)
-    setEditing(false)
+    setParseError(null)
+
+    if (data.type === 'hash') {
+      try {
+        const parsed = JSON.parse(editValue)
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          setParseError('Hash value must be a JSON object')
+          return
+        }
+        const encoded = encodeHash(parsed)
+        onSaveHash(data.key, encoded)
+        setEditing(false)
+      } catch (err) {
+        setParseError('Invalid JSON: ' + err.message)
+      }
+    } else {
+      onSave(data.key, editValue)
+      setEditing(false)
+    }
   }
+
+  const isEditable = data.type === 'string' || data.type === 'hash'
+  const isJsonDisplay = data.type === 'hash' || (data.type === 'string' && (() => {
+    try { JSON.parse(data.value); return true } catch { return false }
+  })())
 
   // Render StreamView for stream type
   if (data.type === 'stream') {
@@ -120,7 +158,7 @@ export default function KeyValue({ data, onSave, onDelete, loading }) {
           )}
         </div>
         <div className="flex gap-2">
-          {data.type === 'string' && !editing && (
+          {isEditable && !editing && (
             <button
               onClick={() => setEditing(true)}
               className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
@@ -140,6 +178,7 @@ export default function KeyValue({ data, onSave, onDelete, loading }) {
                 onClick={() => {
                   setEditValue(formatValue(data.value, data.type))
                   setEditing(false)
+                  setParseError(null)
                 }}
                 className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
               >
@@ -155,6 +194,11 @@ export default function KeyValue({ data, onSave, onDelete, loading }) {
           </button>
         </div>
       </div>
+      {parseError && (
+        <div className="mx-4 mb-2 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          {parseError}
+        </div>
+      )}
       <div className="flex-1 p-4 overflow-auto">
         {editing ? (
           <textarea
@@ -163,8 +207,12 @@ export default function KeyValue({ data, onSave, onDelete, loading }) {
             className="w-full h-full font-mono text-sm p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
           />
         ) : (
-          <pre className="font-mono text-sm bg-gray-100 p-4 rounded-lg overflow-auto whitespace-pre-wrap">
-            {formatValue(data.value, data.type)}
+          <pre className="font-mono text-sm bg-gray-50 p-4 rounded-lg overflow-auto">
+            {isJsonDisplay ? (
+              <JsonHighlight data={formatValue(data.value, data.type)} />
+            ) : (
+              formatValue(data.value, data.type)
+            )}
           </pre>
         )}
       </div>

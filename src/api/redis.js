@@ -36,6 +36,13 @@ export async function deleteKey(key) {
   })
 }
 
+export async function setHashFields(key, fields) {
+  return fetchJson(`${API_BASE}/hash/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ fields })
+  })
+}
+
 export async function getInfo() {
   return fetchJson(`${API_BASE}/info`)
 }
